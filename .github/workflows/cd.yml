@@ -1,0 +1,56 @@
+name: CD - Daily ELT (Ingestion + dbt + docs)
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 10 * * *"  # 10:00 UTC (~07:00 Brasil)
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps (ingestion + dbt)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install db-dtypes google-cloud-bigquery-storage
+          pip install "dbt-core==1.8.7" "dbt-bigquery==1.8.3"
+
+      - name: Run ingestion (Open-Meteo -> Bronze)
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          BQ_DATASET: ${{ vars.BQ_DATASET }}
+          DAYS_BACK: "30"
+        run: |
+          python ingestion/run_weather_ingestions.py
+
+      - name: dbt build + docs
+        env:
+          DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/agro_elt
+        run: |
+          cd dbt/agro_elt
+          dbt build
+          dbt docs generate
+
+      - name: Upload dbt artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-target-cd
+          path: dbt/agro_elt/target

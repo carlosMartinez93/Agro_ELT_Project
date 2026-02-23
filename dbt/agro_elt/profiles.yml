@@ -1,0 +1,12 @@
+agro_elt:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: gen-lang-client-0123141010
+      dataset: analytics_engineering
+      location: US
+      threads: 4
+      priority: interactive
+      job_execution_timeout_seconds: 300

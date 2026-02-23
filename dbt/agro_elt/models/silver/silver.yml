@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: silver_weather_daily
+    description: "Cleaned daily weather. Deduplicated by (date, location_key)."
+    columns:
+      - name: date
+        tests: [not_null]
+      - name: location_key
+        tests: [not_null]
+    data_tests:
+      - unique:
+          column_name: "concat(cast(date as string), '-', location_key)"
