@@ -41,6 +41,14 @@ jobs:
         run: |
           python ingestion/run_weather_ingestions.py
 
+      - name: Run prices ingestion (Stooq -> Bronze)
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          BQ_DATASET: ${{ vars.BQ_DATASET }}
+          STQ_LOOKBACK_DAYS: "90"
+        run: |
+          python ingestion/run_prices_ingestion.py
+
       - name: dbt build + docs
         env:
           DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/agro_elt
