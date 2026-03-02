@@ -41,11 +41,10 @@ jobs:
         run: |
           python ingestion/run_weather_ingestions.py
 
-      - name: Run prices ingestion (Stooq + ANP)
+      - name: Run prices ingestion (ANP)
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           BQ_DATASET: ${{ vars.BQ_DATASET }}
-          STQ_LOOKBACK_DAYS: "365"
           ANP_LOOKBACK_WEEKS: "12"
         run: |
-          python ingestion/run_prices_ingestion.py          
+          python ingestion/run_prices_ingestion.py      
