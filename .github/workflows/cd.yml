@@ -41,24 +41,11 @@ jobs:
         run: |
           python ingestion/run_weather_ingestions.py
 
-      - name: Run prices ingestion (Stooq -> Bronze)
+      - name: Run prices ingestion (Stooq + ANP)
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           BQ_DATASET: ${{ vars.BQ_DATASET }}
-          STQ_LOOKBACK_DAYS: "90"
+          STQ_LOOKBACK_DAYS: "365"
+          ANP_LOOKBACK_WEEKS: "12"
         run: |
-          python ingestion/run_prices_ingestion.py
-
-      - name: dbt build + docs
-        env:
-          DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/agro_elt
-        run: |
-          cd dbt/agro_elt
-          dbt build
-          dbt docs generate
-
-      - name: Upload dbt artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dbt-target-cd
-          path: dbt/agro_elt/target
+          python ingestion/run_prices_ingestion.py          
