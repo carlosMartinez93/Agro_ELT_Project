@@ -4,21 +4,28 @@ models:
   - name: gold_dim_location
     columns:
       - name: location_key
-        tests: [unique, not_null]
+        tests:
+          - not_null
+          - unique
 
   - name: gold_dim_date
     columns:
       - name: date_day
-        tests: [unique, not_null]
+        tests:
+          - not_null
+          - unique
 
   - name: gold_fct_weather_daily
     columns:
       - name: date_day
-        tests: [not_null]
+        tests:
+          - not_null
       - name: location_key
         tests:
           - not_null
-          - relationships:
-              arguments:
-                to: ref('gold_dim_location')
-                field: location_key
+
+    data_tests:
+      - relationships:
+          arguments:
+            field: location_key
+            to: ref('gold_dim_location')
