@@ -117,13 +117,46 @@ def merge_prices_into_bronze(client: bigquery.Client, dataset: str, staging_tabl
 # Stooq (CSV)
 # -----------------------------
 def fetch_stooq_csv(symbol: str) -> pd.DataFrame:
-    url = f"https://stooq.com/q/d/l/?s={symbol.lower()}&i=d"
-    r = requests.get(url, timeout=30)
-    r.raise_for_status()
-    df = pd.read_csv(io.StringIO(r.text))
-    df.columns = [c.strip().lower() for c in df.columns]
-    df["date"] = pd.to_datetime(df["date"]).dt.date
-    return df
+    """
+    Fetch daily OHLC from Stooq as CSV.
+    Adds robust checks + fallback URLs to avoid EmptyDataError.
+    """
+    symbol = symbol.lower().strip()
+
+    urls = [
+        f"https://stooq.com/q/d/l/?s={symbol}&i=d",
+        f"https://stooq.pl/q/d/l/?s={symbol}&i=d",  # fallback domain
+    ]
+
+    last_text = None
+    for url in urls:
+        r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code != 200:
+            last_text = r.text
+            continue
+
+        text = (r.text or "").strip()
+        last_text = text
+
+        # Basic sanity check: Stooq CSV typically includes a header with "Date"
+        if not text or "Date" not in text.splitlines()[0]:
+            continue
+
+        # Parse CSV
+        df = pd.read_csv(io.StringIO(text))
+        df.columns = [c.strip().lower() for c in df.columns]
+
+        # Validate expected columns
+        if "date" not in df.columns or "close" not in df.columns:
+            continue
+
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+        df = df.dropna(subset=["date"])
+        return df
+
+    # If we got here, all attempts failed
+    preview = (last_text[:200] + "...") if last_text else "None"
+    raise RuntimeError(f"Stooq returned empty/non-CSV for symbol={symbol}. Response preview: {preview}")
 
 def stooq_to_bronze(df: pd.DataFrame, product: str, location_key: str, source_name: str) -> pd.DataFrame:
     out = pd.DataFrame({
