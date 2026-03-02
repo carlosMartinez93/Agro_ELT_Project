@@ -116,59 +116,35 @@ def merge_prices_into_bronze(client: bigquery.Client, dataset: str, staging_tabl
 # -----------------------------
 # Stooq (CSV)
 # -----------------------------
-def fetch_stooq_csv(symbol: str) -> pd.DataFrame:
+import yfinance as yf
+
+def fetch_yahoo_history(ticker: str, start: date, end: date) -> pd.DataFrame:
     """
-    Fetch daily OHLC from Stooq as CSV.
-    Adds robust checks + fallback URLs to avoid EmptyDataError.
+    Fetch daily historical prices from Yahoo Finance.
+    Returns columns: date, close
     """
-    symbol = symbol.lower().strip()
+    df = yf.download(ticker, start=start.isoformat(), end=end.isoformat(), interval="1d", auto_adjust=False, progress=False)
+    if df is None or df.empty:
+        return pd.DataFrame(columns=["date", "close"])
 
-    urls = [
-        f"https://stooq.com/q/d/l/?s={symbol}&i=d",
-        f"https://stooq.pl/q/d/l/?s={symbol}&i=d",  # fallback domain
-    ]
+    df = df.reset_index()
+    # Yahoo returns 'Date' + 'Close'
+    df["Date"] = pd.to_datetime(df["Date"]).dt.date
+    out = pd.DataFrame({"date": df["Date"], "close": pd.to_numeric(df["Close"], errors="coerce")}).dropna(subset=["date","close"])
+    return out
 
-    last_text = None
-    for url in urls:
-        r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
-        if r.status_code != 200:
-            last_text = r.text
-            continue
 
-        text = (r.text or "").strip()
-        last_text = text
-
-        # Basic sanity check: Stooq CSV typically includes a header with "Date"
-        if not text or "Date" not in text.splitlines()[0]:
-            continue
-
-        # Parse CSV
-        df = pd.read_csv(io.StringIO(text))
-        df.columns = [c.strip().lower() for c in df.columns]
-
-        # Validate expected columns
-        if "date" not in df.columns or "close" not in df.columns:
-            continue
-
-        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
-        df = df.dropna(subset=["date"])
-        return df
-
-    # If we got here, all attempts failed
-    preview = (last_text[:200] + "...") if last_text else "None"
-    raise RuntimeError(f"Stooq returned empty/non-CSV for symbol={symbol}. Response preview: {preview}")
-
-def stooq_to_bronze(df: pd.DataFrame, product: str, location_key: str, source_name: str) -> pd.DataFrame:
+def yahoo_to_bronze(df: pd.DataFrame, product: str, location_key: str, source_name: str) -> pd.DataFrame:
     out = pd.DataFrame({
         "date": df["date"],
         "location_key": location_key,
         "product": product,
-        "price": pd.to_numeric(df["close"], errors="coerce"),
+        "price": df["close"],
         "currency": "USD",
         "unit": "close",
         "source": source_name,
         "ingested_at": pd.Timestamp.utcnow(),
-    }).dropna(subset=["date", "price"])
+    }).dropna(subset=["date","price"])
     return out
 
 # -----------------------------
@@ -311,37 +287,36 @@ def main():
     client = get_client()
 
     # ---- Stooq products ----
-    stooq_map = {
-        "milho": {"symbol": "zc.f", "source": "stooq_zc_f"},
-        "soja": {"symbol": "zs.f", "source": "stooq_zs_f"},
-        "boi_gordo": {"symbol": "le.f", "source": "stooq_le_f"},
-    }
+    yahoo_map = {
+    "milho": {"ticker": "ZC=F", "source": "yahoo_zc_f"},
+    "soja": {"ticker": "ZS=F", "source": "yahoo_zs_f"},
+    "boi_gordo": {"ticker": "LE=F", "source": "yahoo_le_f"},
+}
     location_global = "global_market_na"
 
-    stooq_frames: List[pd.DataFrame] = []
-    for product, meta in stooq_map.items():
-        last_loaded = get_last_loaded_date(client, dataset, "stooq", product)
+    yahoo_frames: List[pd.DataFrame] = []
+    for product, meta in yahoo_map.items():
+        last_loaded = get_last_loaded_date(client, dataset, "yahoo", product)
         cutoff = (date.today() - timedelta(days=stq_lookback_days)) if last_loaded is None else last_loaded
-        raw = fetch_stooq_csv(meta["symbol"])
-        raw = raw[raw["date"] > cutoff]
-        bronze = stooq_to_bronze(raw, product, location_global, meta["source"])
+        raw = fetch_yahoo_history(meta["ticker"], start=cutoff + timedelta(days=1), end=date.today() + timedelta(days=1))
+        bronze = yahoo_to_bronze(raw, product, location_global, meta["source"])
         if not bronze.empty:
-            stooq_frames.append(bronze)
+            yahoo_frames.append(bronze)
 
-    if stooq_frames:
-        stooq_all = pd.concat(stooq_frames, ignore_index=True)
-        staging = "_stg_prices_stooq_load"
-        load_to_staging(client, dataset, staging, stooq_all)
+    if yahoo_frames:
+        yahoo_all = pd.concat(yahoo_frames, ignore_index=True)
+        staging = "_stg_prices_yahoo_load"
+        load_to_staging(client, dataset, staging, yahoo_all)
         merge_prices_into_bronze(client, dataset, staging)
 
-        for product in stooq_map.keys():
-            max_date = stooq_all.loc[stooq_all["product"] == product, "date"].max()
+        for product in yahoo_map.keys():
+            max_date = yahoo_all.loc[yahoo_all["product"] == product, "date"].max()
             if pd.notna(max_date):
-                upsert_last_loaded_date(client, dataset, "stooq", product, max_date)
+                upsert_last_loaded_date(client, dataset, "yahoo", product, max_date)
 
-        print(f"✅ Stooq upsert done: {len(stooq_all)} rows -> {project}.{dataset}.bronze_prices_daily")
+        print(f"✅ Yahoo upsert done: {len(yahoo_all)} rows -> {project}.{dataset}.bronze_prices_daily")
     else:
-        print("ℹ️ No new Stooq rows to load (watermarks up to date).")
+        print("ℹ️ No new Yahoo rows to load (watermarks up to date).")
 
     # ---- ANP weekly (ethanol + gasoline, RJ city) ----
     # We discover the latest weekly XLSX links from the ANP page itself.
