@@ -19,5 +19,6 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('gold_dim_location')
-              field: location_key
+              arguments:
+                to: ref('gold_dim_location')
+                field: location_key
