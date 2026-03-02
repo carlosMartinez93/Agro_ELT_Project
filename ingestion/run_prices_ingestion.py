@@ -1,18 +1,9 @@
 """
-Option A (ANP only): Ethanol + Gasoline (RJ) -> BigQuery bronze_prices_daily
-
-Why this version:
-- Yahoo/Stooq may rate-limit/block in CI
-- ANP weekly XLSX often contains a cover/title section before the real header row
-- This script auto-detects the header row and parses robustly
-
-What it does:
-1) Discover latest weekly ANP XLSX links from the official ANP page
-2) Download the newest file(s)
-3) Parse RJ + Rio de Janeiro city rows for ETANOL and GASOLINA
-4) Normalize to bronze_prices_daily schema
-5) Load to staging then MERGE into bronze_prices_daily (idempotent)
-6) Update ingestion_state watermark for ANP
+ANP Prices ingestion (Option A - robust):
+- Ingests ANP weekly XLSX (official) for RJ / Rio de Janeiro city
+- Products: Ethanol + Gasoline
+- Writes to BigQuery bronze_prices_daily (idempotent MERGE)
+- Maintains incremental watermark in ingestion_state
 
 Env vars:
 - GCP_PROJECT_ID (required)
@@ -23,6 +14,7 @@ Env vars:
 import os
 import io
 import re
+import unicodedata
 from datetime import date, timedelta
 from typing import Optional, List
 
@@ -37,6 +29,20 @@ ANP_LATEST_WEEKS_PAGE = (
     "https://www.gov.br/anp/pt-br/assuntos/precos-e-defesa-da-concorrencia/precos/"
     "levantamento-de-precos-de-combustiveis-ultimas-semanas-pesquisadas"
 )
+
+# -----------------------------
+# Text normalization helpers
+# -----------------------------
+
+def norm(x: str) -> str:
+    """Lowercase, trim, remove accents, and collapse whitespace."""
+    x = str(x).strip().lower()
+    x = "".join(
+        ch for ch in unicodedata.normalize("NFKD", x)
+        if not unicodedata.combining(ch)
+    )
+    x = re.sub(r"\s+", " ", x)
+    return x
 
 # -----------------------------
 # BigQuery helpers
@@ -145,24 +151,23 @@ def merge_prices_into_bronze(
 
 def discover_latest_anp_weekly_xlsx_links(html: str) -> List[str]:
     """
-    Extract XLSX links that look like:
+    Extract XLSX links like:
       resumo_semanal_lpc_YYYY-MM-DD_YYYY-MM-DD.xlsx
-    from the ANP 'latest weeks' page HTML.
+    from the ANP page HTML.
     """
     links = re.findall(r'href="([^"]*resumo_semanal_lpc_[^"]*\.xlsx)"', html, flags=re.IGNORECASE)
 
-    # Normalize relative links
-    norm = []
+    norm_links: List[str] = []
     for l in links:
         if l.startswith("http"):
-            norm.append(l)
+            norm_links.append(l)
         else:
-            norm.append("https://www.gov.br" + l)
+            norm_links.append("https://www.gov.br" + l)
 
-    # Deduplicate preserving order
+    # Deduplicate while preserving order
     seen = set()
     out = []
-    for l in norm:
+    for l in norm_links:
         if l not in seen:
             out.append(l)
             seen.add(l)
@@ -177,111 +182,110 @@ def download_bytes(url: str) -> bytes:
 
 def parse_anp_weekly_rj_ethanol_gasoline(file_bytes: bytes) -> pd.DataFrame:
     """
-    Robust parser for ANP weekly XLSX:
-    - Detects the real header row automatically (ANP files often have a cover/title first)
-    - Filters to RJ + Rio de Janeiro city
-    - Keeps only ETANOL and GASOLINA rows
-    - Uses 'Data Final' if present as the week date (else 'Data Inicial', else today)
-    - Returns standardized bronze rows for two products: etanol, gasolina
+    Robust ANP weekly XLSX parser:
+    - Tries multiple sheets (ANP layout changes)
+    - Auto-detects header row (skips cover/title sections)
+    - Normalizes accents and spacing
+    - Filters RJ + Rio de Janeiro city
+    - Keeps only ETANOL and GASOLINA
+    - Uses 'Data Final' as week date when available
     """
 
-    # Read first sheet WITHOUT headers to locate the real header row
-    preview = pd.read_excel(io.BytesIO(file_bytes), sheet_name=0, header=None)
+    xls_file = pd.ExcelFile(io.BytesIO(file_bytes))
 
-    def norm(x: str) -> str:
-        x = str(x).strip().lower()
-        x = re.sub(r"\s+", " ", x)
-        return x
+    def find_header_row(preview_df: pd.DataFrame) -> Optional[int]:
+        for i in range(min(len(preview_df), 120)):
+            row_vals = [norm(v) for v in preview_df.iloc[i].tolist() if pd.notna(v)]
+            row_text = " | ".join(row_vals)
+            if (("estado" in row_text or "uf" in row_text)
+                and ("produto" in row_text)
+                and ("municip" in row_text)):
+                return i
+        return None
 
-    header_row = None
-    for i in range(min(len(preview), 80)):  # scan first ~80 rows
-        row_vals = [norm(v) for v in preview.iloc[i].tolist() if pd.notna(v)]
-        row_text = " | ".join(row_vals)
-
-        # Typical header row contains these concepts
-        if ("estado" in row_text or "uf" in row_text) and "produto" in row_text and ("municip" in row_text):
-            header_row = i
-            break
-
-    if header_row is None:
-        raise ValueError("ANP parser: could not find header row (estado/municipio/produto). File format changed.")
-
-    # Re-read with the detected header row
-    df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=0, header=header_row)
-    df.columns = [norm(c) for c in df.columns]
-
-    def find_col_contains(*tokens):
-        for c in df.columns:
+    def find_col_contains(columns: List[str], *tokens: str) -> Optional[str]:
+        for c in columns:
             if all(t in c for t in tokens):
                 return c
         return None
 
-    col_estado = find_col_contains("estado") or find_col_contains("uf")
-    col_mun = find_col_contains("municip")
-    col_prod = find_col_contains("produto")
-    col_preco = (
-        find_col_contains("preço", "médio", "revenda") or
-        find_col_contains("preco", "medio", "revenda") or
-        find_col_contains("preço", "medio", "revenda") or
-        find_col_contains("preco", "médio", "revenda")
+    # Try up to first N sheets
+    for sheet_name in xls_file.sheet_names[:8]:
+        preview = pd.read_excel(xls_file, sheet_name=sheet_name, header=None)
+        header_row = find_header_row(preview)
+        if header_row is None:
+            continue
+
+        df = pd.read_excel(xls_file, sheet_name=sheet_name, header=header_row)
+        df.columns = [norm(c) for c in df.columns]
+
+        col_estado = find_col_contains(df.columns, "estado") or find_col_contains(df.columns, "uf")
+        col_mun = find_col_contains(df.columns, "municip")
+        col_prod = find_col_contains(df.columns, "produto")
+        col_preco = (
+            find_col_contains(df.columns, "preco", "medio", "revenda") or
+            find_col_contains(df.columns, "preco", "medio", "venda") or
+            find_col_contains(df.columns, "preco", "revenda")
+        )
+        col_data_fim = find_col_contains(df.columns, "data", "final")
+        col_data_ini = find_col_contains(df.columns, "data", "inicial")
+
+        if any(v is None for v in [col_estado, col_mun, col_prod, col_preco]):
+            # Not the expected table even if header-like row exists
+            continue
+
+        dfx = df.copy()
+        dfx["estado"] = dfx[col_estado].astype(str).str.strip().str.upper()
+        dfx["municipio"] = dfx[col_mun].astype(str).str.strip().str.upper()
+        dfx["produto"] = dfx[col_prod].astype(str).str.strip().str.upper()
+
+        # RJ + Rio de Janeiro
+        dfx = dfx[(dfx["estado"] == "RJ") & (dfx["municipio"] == "RIO DE JANEIRO")]
+
+        is_gas = dfx["produto"].str.contains("GASOLINA", na=False)
+        is_eth = dfx["produto"].str.contains("ETANOL", na=False)
+        dfx = dfx[is_gas | is_eth]
+
+        if dfx.empty:
+            # This file/sheet may not contain RJ rows
+            continue
+
+        if col_data_fim is not None:
+            dfx["week_date"] = pd.to_datetime(dfx[col_data_fim], errors="coerce").dt.date
+        elif col_data_ini is not None:
+            dfx["week_date"] = pd.to_datetime(dfx[col_data_ini], errors="coerce").dt.date
+        else:
+            dfx["week_date"] = date.today()
+
+        dfx["price"] = pd.to_numeric(dfx[col_preco], errors="coerce")
+        dfx = dfx.dropna(subset=["week_date", "price"])
+
+        def map_product(p: str) -> str:
+            return "gasolina" if "GASOLINA" in p else "etanol"
+
+        out = pd.DataFrame({
+            "date": dfx["week_date"],
+            "location_key": "rio_de_janeiro_rj_sudeste",
+            "product": dfx["produto"].apply(map_product),
+            "price": dfx["price"],
+            "currency": "BRL",
+            "unit": "R$/litro",
+            "source": "anp_resumo_semanal_lpc",
+            "ingested_at": pd.Timestamp.utcnow(),
+        })
+
+        out = (
+            out.groupby(["date","location_key","product","currency","unit","source"], as_index=False)
+               .agg(price=("price","mean"), ingested_at=("ingested_at","max"))
+        )
+
+        if not out.empty:
+            return out
+
+    raise ValueError(
+        "ANP parser: could not find a valid sheet/header with (estado/uf, municipio, produto, preco). "
+        "ANP file format may have changed."
     )
-    col_data_fim = find_col_contains("data", "final")
-    col_data_ini = find_col_contains("data", "inicial")
-
-    missing = [k for k, v in {
-        "estado": col_estado,
-        "municipio": col_mun,
-        "produto": col_prod,
-        "preco_revenda": col_preco
-    }.items() if v is None]
-
-    if missing:
-        raise ValueError(f"ANP parser: missing columns {missing}. Columns seen: {list(df.columns)}")
-
-    dfx = df.copy()
-    dfx["estado"] = dfx[col_estado].astype(str).str.strip().str.upper()
-    dfx["municipio"] = dfx[col_mun].astype(str).str.strip().str.upper()
-    dfx["produto"] = dfx[col_prod].astype(str).str.strip().str.upper()
-
-    # RJ + Rio de Janeiro city
-    dfx = dfx[(dfx["estado"] == "RJ") & (dfx["municipio"] == "RIO DE JANEIRO")]
-
-    # Keep only gasoline and ethanol
-    is_gas = dfx["produto"].str.contains("GASOLINA", na=False)
-    is_eth = dfx["produto"].str.contains("ETANOL", na=False)
-    dfx = dfx[is_gas | is_eth]
-
-    # Pick week date
-    if col_data_fim is not None:
-        dfx["week_date"] = pd.to_datetime(dfx[col_data_fim], errors="coerce").dt.date
-    elif col_data_ini is not None:
-        dfx["week_date"] = pd.to_datetime(dfx[col_data_ini], errors="coerce").dt.date
-    else:
-        dfx["week_date"] = date.today()
-
-    dfx["price"] = pd.to_numeric(dfx[col_preco], errors="coerce")
-    dfx = dfx.dropna(subset=["week_date", "price"])
-
-    def map_product(p: str) -> str:
-        return "gasolina" if "GASOLINA" in p else "etanol"
-
-    out = pd.DataFrame({
-        "date": dfx["week_date"],
-        "location_key": "rio_de_janeiro_rj_sudeste",
-        "product": dfx["produto"].apply(map_product),
-        "price": dfx["price"],
-        "currency": "BRL",
-        "unit": "R$/litro",
-        "source": "anp_resumo_semanal_lpc",
-        "ingested_at": pd.Timestamp.utcnow(),
-    })
-
-    # Aggregate safety: 1 row per (week_date, product, location)
-    out = (
-        out.groupby(["date", "location_key", "product", "currency", "unit", "source"], as_index=False)
-           .agg(price=("price", "mean"), ingested_at=("ingested_at", "max"))
-    )
-    return out
 
 # -----------------------------
 # Main
@@ -308,9 +312,7 @@ def main():
 
     loaded_any = False
 
-    # Try newest links first (limit attempts)
-    for url in links[:15]:
-        # Extract week end date from filename if possible
+    for url in links[:40]:  # try first 40 (newest first, usually enough)
         m = re.search(r"resumo_semanal_lpc_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})\.xlsx", url)
         if m:
             week_end = pd.to_datetime(m.group(2)).date()
@@ -320,28 +322,29 @@ def main():
         try:
             content = download_bytes(url)
             anp_df = parse_anp_weekly_rj_ethanol_gasoline(content)
-
-            if anp_df.empty:
-                continue
-
-            staging = "_stg_prices_anp_load"
-            load_to_staging(client, dataset, staging, anp_df)
-            merge_prices_into_bronze(client, dataset, staging)
-
-            max_date = anp_df["date"].max()
-            upsert_last_loaded_date(client, dataset, "anp", "combustiveis_rj", max_date)
-
-            print(f"✅ ANP upsert done: {len(anp_df)} rows from {url}")
-            loaded_any = True
-            break
-
+        except ValueError as e:
+            print(f"Parser failed for {url}: {e}. Trying next link...")
+            continue
         except requests.HTTPError as e:
-            # Some links may be stale/unavailable
             print(f"HTTP error for {url}: {e}. Trying next link...")
             continue
 
+        if anp_df.empty:
+            continue
+
+        staging = "_stg_prices_anp_load"
+        load_to_staging(client, dataset, staging, anp_df)
+        merge_prices_into_bronze(client, dataset, staging)
+
+        max_date = anp_df["date"].max()
+        upsert_last_loaded_date(client, dataset, "anp", "combustiveis_rj", max_date)
+
+        print(f"✅ ANP upsert done: {len(anp_df)} rows from {url}")
+        loaded_any = True
+        break
+
     if not loaded_any:
-        print("ℹ️ No new ANP week loaded (either up to date or files unavailable).")
+        print("ℹ️ No new ANP week loaded (either up to date, RJ not present, or format changed).")
 
     print(f"Done. Target table: {project}.{dataset}.bronze_prices_daily")
 
