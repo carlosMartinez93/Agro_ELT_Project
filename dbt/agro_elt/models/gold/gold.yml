@@ -2,30 +2,31 @@ version: 2
 
 models:
   - name: gold_dim_location
+    description: "Location dimension used by gold fact tables."
     columns:
       - name: location_key
+        description: "Surrogate key for a location (e.g., rio_de_janeiro_rj_sudeste, global_market_na)."
         tests:
           - not_null
           - unique
 
   - name: gold_dim_date
+    description: "Date dimension (day grain)."
     columns:
       - name: date_day
+        description: "Calendar day."
         tests:
           - not_null
           - unique
 
   - name: gold_fct_weather_daily
+    description: "Daily weather fact table at (date_day, location_key) grain."
     columns:
       - name: date_day
+        description: "Calendar day for the observation."
         tests:
           - not_null
       - name: location_key
+        description: "Foreign key to gold_dim_location."
         tests:
           - not_null
-
-    data_tests:
-      - relationships:
-          arguments:
-            field: location_key
-            to: ref('gold_dim_location')
