@@ -1,6 +1,6 @@
 # Agro ELT Project
 
-> Pipeline de dados moderno para analise de clima e precos de combustiveis no agronegocio brasileiro.
+> A modern data pipeline for weather and fuel price analysis in the Brazilian agricultural sector.
 
 ![CI](https://github.com/carlosMartinez93/Agro_ELT_Project/actions/workflows/ci.yml/badge.svg)
 ![CD](https://github.com/carlosMartinez93/Agro_ELT_Project/actions/workflows/cd.yml/badge.svg)
@@ -10,28 +10,28 @@
 
 ---
 
-## Visao Geral
+## Overview
 
-O **Agro ELT Project** e um pipeline de dados production-ready que ingere dados climaticos diarios e precos de combustiveis (etanol e gasolina) da ANP, transforma esses dados em camadas analiticas estruturadas via dbt, e os disponibiliza no Google BigQuery para analises do agronegocio.
+The **Agro ELT Project** is a production-ready data pipeline that ingests daily weather data and fuel prices (ethanol and gasoline) from ANP, transforms them into structured analytical layers via dbt, and serves the results in Google BigQuery for agribusiness analysis.
 
-O pipeline roda automaticamente todo dia via GitHub Actions, garantindo dados sempre atualizados sem intervencao manual.
+The pipeline runs automatically every day via GitHub Actions, ensuring fresh data with no manual intervention.
 
 ---
 
-## Arquitetura
+## Architecture
 
 ```
 +------------------------------------------------------------------+
-|                        Fontes de Dados                           |
+|                         Data Sources                             |
 |                                                                  |
 |   Open-Meteo API          ANP (Gov BR)          Seed Data        |
-|   (Clima diario)       (Precos semanais)       (Localidades)     |
+|   (Daily weather)      (Weekly prices)         (Locations)       |
 +----------------+-----------------+------------------+-----------+
                  |                 |                  |
                  v                 v                  v
 +------------------------------------------------------------------+
-|                      Camada Bronze (Raw)                         |
-|                         BigQuery                                 |
+|                       Bronze Layer (Raw)                         |
+|                          BigQuery                                |
 |                                                                  |
 |  bronze_weather_daily   bronze_prices_daily   bronze_locations   |
 |  ingestion_state (watermark)                                     |
@@ -39,16 +39,16 @@ O pipeline roda automaticamente todo dia via GitHub Actions, garantindo dados se
                             |  dbt models
                             v
 +------------------------------------------------------------------+
-|                     Camada Silver (Cleaned)                      |
-|                    BigQuery Views (dbt)                          |
+|                      Silver Layer (Cleaned)                      |
+|                     BigQuery Views (dbt)                         |
 |                                                                  |
-|              silver_weather_daily (dedupado, tipado)             |
+|              silver_weather_daily (deduped, typed)               |
 +---------------------------+--------------------------------------+
                             |  dbt models
                             v
 +------------------------------------------------------------------+
-|                      Camada Gold (Business)                      |
-|                    BigQuery Tables (dbt)                         |
+|                       Gold Layer (Business)                      |
+|                     BigQuery Tables (dbt)                        |
 |                                                                  |
 |  gold_fct_weather_daily    gold_dim_location    gold_dim_date    |
 +------------------------------------------------------------------+
@@ -56,54 +56,54 @@ O pipeline roda automaticamente todo dia via GitHub Actions, garantindo dados se
 
 ---
 
-## Fontes de Dados
+## Data Sources
 
-| Fonte | Tipo | Dados | Frequencia |
-|-------|------|-------|------------|
-| [Open-Meteo](https://open-meteo.com/) | API REST (gratuita) | Temperatura max/min, precipitacao | Diaria |
-| [ANP](https://www.gov.br/anp) | XLSX (portal gov) | Precos de etanol e gasolina (R$/litro) | Semanal |
-| Seed | BigQuery table | Cidades, estados, regioes, coordenadas | Estatica |
+| Source | Type | Data | Frequency |
+|--------|------|------|-----------|
+| [Open-Meteo](https://open-meteo.com/) | REST API (free) | Max/min temperature, precipitation | Daily |
+| [ANP](https://www.gov.br/anp) | XLSX (gov portal) | Ethanol and gasoline prices (BRL/liter) | Weekly |
+| Seed | BigQuery table | Cities, states, regions, coordinates | Static |
 
 ---
 
-## Stack Tecnologica
+## Tech Stack
 
-| Camada | Tecnologia |
-|--------|-----------|
-| Linguagem | Python 3.11 |
+| Layer | Technology |
+|-------|-----------|
+| Language | Python 3.11 |
 | Data Warehouse | Google BigQuery |
-| Transformacao | dbt-core 1.8.7 + dbt-bigquery |
-| Autenticacao GCP | Workload Identity Federation |
-| Orquestracao | GitHub Actions |
-| Parsing Excel | openpyxl |
+| Transformation | dbt-core 1.8.7 + dbt-bigquery |
+| GCP Authentication | Workload Identity Federation |
+| Orchestration | GitHub Actions |
+| Excel Parsing | openpyxl |
 | HTTP | requests |
 
 ---
 
-## Estrutura do Projeto
+## Project Structure
 
 ```
 Agro_ELT_Project/
 +-- .github/
 |   +-- workflows/
-|   |   +-- ci.yml              # Roda dbt build em PRs
-|   |   +-- cd.yml              # Ingesta + dbt todo dia as 10h UTC
-|   |   +-- pages.yml           # Publica dbt docs no GitHub Pages
+|   |   +-- ci.yml              # Runs dbt build on PRs
+|   |   +-- cd.yml              # Ingestion + dbt every day at 10:00 UTC
+|   |   +-- pages.yml           # Publishes dbt docs to GitHub Pages
 |   +-- CODEOWNERS.txt
 |   +-- pull_request_template.md
 |
 +-- dbt/agro_elt/
 |   +-- models/
-|   |   +-- silver/             # Views limpas e tipadas
-|   |   +-- gold/               # Fatos e dimensoes para analise
-|   |   +-- sources.yml         # Definicao das fontes Bronze
-|   +-- tests/                  # Testes de integridade referencial
+|   |   +-- silver/             # Cleaned and typed views
+|   |   +-- gold/               # Facts and dimensions for analysis
+|   |   +-- sources.yml         # Bronze source definitions
+|   +-- tests/                  # Referential integrity tests
 |   +-- dbt_project.yml
 |   +-- profiles.yml
 |
 +-- ingestion/
-|   +-- run_weather_ingestions.py   # Ingestao Open-Meteo -> BigQuery
-|   +-- run_prices_ingestion.py     # Ingestao ANP XLSX -> BigQuery
+|   +-- run_weather_ingestions.py   # Open-Meteo -> BigQuery ingestion
+|   +-- run_prices_ingestion.py     # ANP XLSX -> BigQuery ingestion
 |
 +-- requirements.txt
 +-- README.md
@@ -111,76 +111,76 @@ Agro_ELT_Project/
 
 ---
 
-## Modelos dbt
+## dbt Models
 
 ### Silver
-| Modelo | Tipo | Descricao |
-|--------|------|-----------|
-| `silver_weather_daily` | View | Clima diario limpo e dedupado por (date, location_key) |
+| Model | Type | Description |
+|-------|------|-------------|
+| `silver_weather_daily` | View | Cleaned and deduped daily weather by (date, location_key) |
 
 ### Gold
-| Modelo | Tipo | Descricao |
-|--------|------|-----------|
-| `gold_fct_weather_daily` | Table | Fato de clima diario (temp max/min, precipitacao) |
-| `gold_dim_location` | Table | Dimensao de localidades (cidade, estado, regiao, coords) |
-| `gold_dim_date` | Table | Dimensao de datas (ano, mes, dia, ano_mes) |
+| Model | Type | Description |
+|-------|------|-------------|
+| `gold_fct_weather_daily` | Table | Daily weather fact table (max/min temp, precipitation) |
+| `gold_dim_location` | Table | Location dimension (city, state, region, coords) |
+| `gold_dim_date` | Table | Date dimension (year, month, day, year_month) |
 
 ---
 
-## Padroes de Ingestao
+## Ingestion Patterns
 
-Todos os scripts de ingestao seguem o padrao **Staging + MERGE** para garantir idempotencia:
+All ingestion scripts follow the **Staging + MERGE** pattern to guarantee idempotency:
 
 ```
-1. Busca dados da fonte externa
-2. Carrega em tabela staging (_stg_*) com WRITE_TRUNCATE
-3. Executa MERGE na tabela bronze (atualiza ou insere)
-4. Atualiza watermark em ingestion_state (para carga incremental)
+1. Fetch data from external source
+2. Load into staging table (_stg_*) with WRITE_TRUNCATE
+3. MERGE into bronze table (insert or update)
+4. Update watermark in ingestion_state (for incremental loading)
 ```
 
-Isso significa que o pipeline pode rodar multiplas vezes no mesmo dia **sem duplicar dados**.
+This means the pipeline can run multiple times on the same day **without duplicating data**.
 
 ---
 
 ## CI/CD
 
 ### CI - Pull Requests
-- Instala dependencias e autentica no GCP via WIF
-- Roda `dbt build` (modelos silver + gold + todos os testes)
-- Gera e publica documentacao dbt como artefato
+- Installs dependencies and authenticates to GCP via WIF
+- Runs `dbt build` (silver + gold models + all tests)
+- Generates and uploads dbt documentation as a build artifact
 
-### CD - Deploy Diario
-- **Schedule**: todo dia as 10:00 UTC (~07:00 horario de Brasilia)
-- **Trigger**: tambem dispara em push para `main`
-- Passos:
-  1. Ingestao de clima (ultimos 30 dias, configuravel via `DAYS_BACK`)
-  2. Ingestao de precos ANP (ultimas 12 semanas, configuravel via `ANP_LOOKBACK_WEEKS`)
-  3. Execucao dos modelos dbt
+### CD - Daily Deploy
+- **Schedule**: every day at 10:00 UTC (~07:00 Brasilia time)
+- **Trigger**: also fires on push to `main`
+- Steps:
+  1. Weather ingestion (last 30 days, configurable via `DAYS_BACK`)
+  2. ANP price ingestion (last 12 weeks, configurable via `ANP_LOOKBACK_WEEKS`)
+  3. dbt model execution
 
 ### Docs - GitHub Pages
-- Publica o site de documentacao dbt automaticamente a cada push em `main`
+- Automatically publishes the dbt documentation site on every push to `main`
 
 ---
 
-## Configuracao
+## Configuration
 
-### Variaveis de Ambiente
+### Environment Variables
 
 ```bash
-# Obrigatorias
-GCP_PROJECT_ID=seu-projeto-gcp
+# Required
+GCP_PROJECT_ID=your-gcp-project
 BQ_DATASET=analytics_engineering
 
-# Opcionais
-DAYS_BACK=30                # Dias de historico de clima (padrao: 30)
-ANP_LOOKBACK_WEEKS=12       # Semanas de lookback ANP (padrao: 12)
+# Optional
+DAYS_BACK=30                # Days of weather history to fetch (default: 30)
+ANP_LOOKBACK_WEEKS=12       # ANP price lookback in weeks (default: 12)
 ```
 
-### GitHub Secrets (para Workload Identity Federation)
+### GitHub Secrets (Workload Identity Federation)
 
 ```
-WIF_PROVIDER          # Recurso do Workload Identity Provider
-WIF_SERVICE_ACCOUNT   # E-mail da service account
+WIF_PROVIDER          # Workload Identity Provider resource
+WIF_SERVICE_ACCOUNT   # Service account email
 ```
 
 ### GitHub Variables (Actions)
@@ -192,54 +192,54 @@ BQ_DATASET
 
 ---
 
-## Rodando Localmente
+## Running Locally
 
 ```bash
-# Clone o repositorio
+# Clone the repository
 git clone https://github.com/carlosMartinez93/Agro_ELT_Project.git
 cd Agro_ELT_Project
 
-# Instale as dependencias
+# Install dependencies
 pip install -r requirements.txt
 
-# Configure as variaveis de ambiente
-cp .env.example .env  # edite com suas credenciais GCP
+# Set up environment variables
+cp .env.example .env  # fill in your GCP credentials
 
-# Execute a ingestao
+# Run ingestion
 python ingestion/run_weather_ingestions.py
 python ingestion/run_prices_ingestion.py
 
-# Execute as transformacoes dbt
+# Run dbt transformations
 cd dbt/agro_elt
 dbt build
 ```
 
 ---
 
-## Qualidade de Dados
+## Data Quality
 
-Os modelos dbt incluem testes automatizados:
+dbt models include automated tests:
 
-- **not_null**: colunas criticas nunca podem ser nulas
-- **unique**: chaves primarias e compostas sao unicas
-- **relationships**: chaves estrangeiras validadas contra dimensoes
-- **Deduplicacao**: silver layer garante 1 linha por (date, location_key)
+- **not_null**: critical columns can never be null
+- **unique**: primary and composite keys are unique
+- **relationships**: foreign keys validated against dimensions
+- **Deduplication**: silver layer enforces 1 row per (date, location_key)
 
-Todos os testes rodam automaticamente em cada PR via GitHub Actions.
-
----
-
-## Documentacao dbt
-
-A documentacao completa dos modelos (com linhagem de dados, descricoes de colunas e resultados de testes) e publicada automaticamente no GitHub Pages a cada deploy.
+All tests run automatically on every PR via GitHub Actions.
 
 ---
 
-## Contribuindo
+## dbt Documentation
 
-1. Fork o repositorio
-2. Crie uma branch: `git checkout -b feat/minha-feature`
-3. Siga o [pull request template](.github/pull_request_template.md)
-4. Abra um PR - o CI vai rodar `dbt build` automaticamente
+The full model documentation (data lineage, column descriptions, and test results) is automatically published to GitHub Pages on every deploy.
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a branch: `git checkout -b feat/my-feature`
+3. Follow the [pull request template](.github/pull_request_template.md)
+4. Open a PR - CI will run `dbt build` automatically
 
 > **Code Owner**: [@carlosMartinez93](https://github.com/carlosMartinez93)
