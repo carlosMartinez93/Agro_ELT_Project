@@ -38,12 +38,14 @@ jobs:
       - name: Generate dbt docs
         env:
           DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/agro_elt
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          BQ_DATASET: ${{ vars.BQ_DATASET }}
         run: |
           cd dbt/agro_elt
           dbt deps || true
           dbt docs generate
 
-          # Pages expects a folder. We'll publish target/ as the site root.
+          # Pages expects a folder. We publish target/ as the site root.
           touch target/.nojekyll
 
       - name: Upload Pages artifact

@@ -1,10 +1,11 @@
-name: CD - Daily ELT (Ingestion + dbt + docs)
+name: CD - Daily ELT (Ingestion + dbt)
 
+# Temporary: manual trigger only, until the bronze tables exist in the new project.
+# After that, restore the schedule block below.
 on:
-  push:
-    branches: ["main"]
-  schedule:
-    - cron: "0 10 * * *"  # 10:00 UTC (~07:00 Brasil)
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 10 * * *"  # 10:00 UTC (~07:00 Brasil)
 
 permissions:
   id-token: write
@@ -47,4 +48,13 @@ jobs:
           BQ_DATASET: ${{ vars.BQ_DATASET }}
           ANP_LOOKBACK_WEEKS: "12"
         run: |
-          python ingestion/run_prices_ingestion.py      
+          python ingestion/run_prices_ingestion.py
+
+      - name: dbt build (models + tests)
+        env:
+          DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/agro_elt
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          BQ_DATASET: ${{ vars.BQ_DATASET }}
+        run: |
+          cd dbt/agro_elt
+          dbt build

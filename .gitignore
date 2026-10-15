@@ -16,3 +16,10 @@ Thumbs.db
 
 # Env
 .env
+
+venv/
+.venv/
+__pycache__/
+.env
+dbt/agro_elt/target/
+dbt/agro_elt/logs/
