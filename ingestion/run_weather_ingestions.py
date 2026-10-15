@@ -78,7 +78,7 @@ def fetch_open_meteo_daily(lat: float, lon: float, days_back: int) -> pd.DataFra
         "latitude": lat,
         "longitude": lon,
         "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
-        "timezone": "UTC",
+        "timezone": "America/Sao_Paulo",
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
     }

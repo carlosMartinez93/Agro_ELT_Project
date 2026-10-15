@@ -31,10 +31,14 @@ jobs:
       - name: dbt build (models + tests) + docs
         env:
           DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/agro_elt
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          # CI writes models to its own dataset, never to the production one.
+          # Sources still read bronze from the dataset declared in sources.yml.
+          BQ_DATASET: analytics_engineering_ci
         run: |
           cd dbt/agro_elt
           dbt debug
-          dbt build --select silver_weather_daily gold_dim_location gold_dim_date gold_fct_weather_daily
+          dbt build
           dbt docs generate
 
       - name: Upload dbt artifacts

@@ -36,3 +36,10 @@ models:
     gold:
       +materialized: table
 
+seeds:
+  agro_elt:
+    bronze_locations:
+      +column_types:
+        latitude: float64
+        longitude: float64
+
