@@ -4,8 +4,5 @@ sources:
   - name: bronze
     schema: analytics_engineering
     tables:
-      - name: bronze_locations
-        description: "Seeded locations (city/state/region + lat/lon)."
-
       - name: bronze_weather_daily
-        description: "Daily weather ingested from Open-Meteo."
+        description: "Daily weather ingested from Open-Meteo (forecast API for recent days, archive API for the historical backfill)."

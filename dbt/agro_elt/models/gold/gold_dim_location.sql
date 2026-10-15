@@ -6,4 +6,4 @@ select
   region,
   latitude,
   longitude
-from {{ source('bronze', 'bronze_locations') }}
+from {{ ref('bronze_locations') }}
