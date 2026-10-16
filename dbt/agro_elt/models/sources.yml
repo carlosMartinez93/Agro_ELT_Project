@@ -6,3 +6,14 @@ sources:
     tables:
       - name: bronze_weather_daily
         description: "Daily weather ingested from Open-Meteo (forecast API for recent days, archive API for the historical backfill)."
+
+  - name: basedosdados
+    database: basedosdados
+    schema: br_anp_precos_combustiveis
+    tables:
+      - name: microdados
+        description: "ANP fuel price survey by gas station (third-party mirror by Base dos Dados). Coverage checked: 2022-01-03 to 2026-08-28."
+        loaded_at_field: "cast(data_coleta as timestamp)"
+        freshness:
+          warn_after: {count: 75, period: day}
+          error_after: {count: 120, period: day}
