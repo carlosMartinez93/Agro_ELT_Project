@@ -39,7 +39,7 @@ jobs:
           cd dbt/agro_elt
           dbt debug
           dbt build
-          dbt docs generate
+          dbt docs generate --exclude "source:basedosdados"
 
       - name: Upload dbt artifacts
         uses: actions/upload-artifact@v4
