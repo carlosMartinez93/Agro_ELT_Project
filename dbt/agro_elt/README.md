@@ -1,15 +1,7 @@
-Welcome to your new dbt project!
+# dbt project: agro_elt
 
-### Using the starter project
+Models, seeds and tests for the Agro ELT pipeline. See the [root README](../../README.md) for the architecture, the results and how to run it.
 
-Try running the following commands:
-- dbt run
-- dbt test
+Run from this directory with `GCP_PROJECT_ID` and `BQ_DATASET` set:
 
-
-### Resources:
-- Learn more about dbt [in the docs](https://docs.getdbt.com/docs/introduction)
-- Check out [Discourse](https://discourse.getdbt.com/) for commonly asked questions and answers
-- Join the [chat](https://community.getdbt.com/) on Slack for live discussions and support
-- Find [dbt events](https://events.getdbt.com) near you
-- Check out [the blog](https://blog.getdbt.com/) for the latest news on dbt's development and best practices
+    dbt build
