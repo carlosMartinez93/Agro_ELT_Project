@@ -1,7 +1,7 @@
-# Agro ELT Project
+# Fuel Weather ELT
 
-![CI](https://github.com/carlosMartinez93/Agro_ELT_Project/actions/workflows/ci.yml/badge.svg)
-![CD](https://github.com/carlosMartinez93/Agro_ELT_Project/actions/workflows/cd.yml/badge.svg)
+![CI](https://github.com/carlosMartinez93/Fuel_Weather_ELT/actions/workflows/ci.yml/badge.svg)
+![CD](https://github.com/carlosMartinez93/Fuel_Weather_ELT/actions/workflows/cd.yml/badge.svg)
 ![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)
 ![dbt](https://img.shields.io/badge/dbt-1.8.7-orange?logo=dbt)
 ![BigQuery](https://img.shields.io/badge/BigQuery-GCP-4285F4?logo=google-cloud)
@@ -12,7 +12,7 @@ An ELT pipeline (Python, BigQuery, dbt) that brings together daily weather and w
 
 **Short answer: in this data, no detectable relationship** (see [Results](#results)). The pipeline, the tests and the validation of the price source are the main deliverables.
 
-**Live dbt documentation (lineage and column descriptions):** https://carlosmartinez93.github.io/Agro_ELT_Project/
+**Live dbt documentation (lineage and column descriptions):** https://carlosmartinez93.github.io/Fuel_Weather_ELT/
 
 ---
 
@@ -101,8 +101,8 @@ Strongest adjusted correlations (October 2026 run):
 Requirements: Python 3.11, a GCP project with billing enabled (BigQuery DML does not work without it) and `gcloud` authenticated (`gcloud auth application-default login`).
 
 ```bash
-git clone https://github.com/carlosMartinez93/Agro_ELT_Project.git
-cd Agro_ELT_Project
+git clone https://github.com/carlosMartinez93/Fuel_Weather_ELT.git
+cd Fuel_Weather_ELT
 python -m venv venv && source venv/bin/activate   # Windows: .\venv\Scripts\Activate.ps1
 pip install -q -r requirements.txt
 
