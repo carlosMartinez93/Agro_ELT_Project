@@ -6,9 +6,13 @@
 ![dbt](https://img.shields.io/badge/dbt-1.8.7-orange?logo=dbt)
 ![BigQuery](https://img.shields.io/badge/BigQuery-GCP-4285F4?logo=google-cloud)
 
-An ELT pipeline (Python, BigQuery, dbt) that brings together daily weather and weekly fuel prices for five Brazilian agricultural states, and uses them to ask one question: **does rainfall in sugarcane regions help explain ethanol and gasoline price changes?**
+An ELT pipeline (Python, BigQuery, dbt) that brings together daily weather and weekly fuel prices for five Brazilian agricultural states, and uses them to ask one question:
+
+**does rainfall in sugarcane regions help explain ethanol and gasoline price changes?**
 
 **Short answer: in this data, no detectable relationship** (see [Results](#results)). The pipeline, the tests and the validation of the price source are the main deliverables.
+
+**Live dbt documentation (lineage and column descriptions):** https://carlosmartinez93.github.io/Agro_ELT_Project/
 
 ---
 
