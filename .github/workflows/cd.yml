@@ -1,19 +1,25 @@
 name: CD - Daily ELT (Ingestion + dbt)
 
-# Temporary: manual trigger only, until the bronze tables exist in the new project.
-# After that, restore the schedule block below.
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: "0 10 * * *"  # 10:00 UTC (~07:00 Brasil)
+  schedule:
+    - cron: "0 10 * * *"  # 10:00 UTC (~07:00 Brasil)
 
 permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: cd-daily
+  cancel-in-progress: false
+
 jobs:
   daily:
     runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      BQ_DATASET: ${{ vars.BQ_DATASET }}
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/agro_elt
     steps:
       - uses: actions/checkout@v4
 
@@ -29,32 +35,19 @@ jobs:
 
       - name: Install deps (ingestion + dbt)
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install db-dtypes google-cloud-bigquery-storage
-          pip install "dbt-core==1.8.7" "dbt-bigquery==1.8.3"
+          python -m pip install -q --upgrade pip
+          pip install -q -r requirements.txt
+          pip install -q google-cloud-bigquery-storage
 
-      - name: Run ingestion (Open-Meteo -> Bronze)
+      - name: Run weather ingestion (Open-Meteo -> Bronze)
         env:
-          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          BQ_DATASET: ${{ vars.BQ_DATASET }}
           DAYS_BACK: "30"
-        run: |
-          python ingestion/run_weather_ingestions.py
+        run: python ingestion/run_weather_ingestions.py
 
-      - name: Run prices ingestion (ANP)
-        env:
-          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          BQ_DATASET: ${{ vars.BQ_DATASET }}
-          ANP_LOOKBACK_WEEKS: "12"
-        run: |
-          python ingestion/run_prices_ingestion.py
+      - name: dbt build (seeds, models, tests)
+        working-directory: dbt/agro_elt
+        run: dbt build
 
-      - name: dbt build (models + tests)
-        env:
-          DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/agro_elt
-          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          BQ_DATASET: ${{ vars.BQ_DATASET }}
-        run: |
-          cd dbt/agro_elt
-          dbt build
+      - name: dbt source freshness (fuel price mirror)
+        working-directory: dbt/agro_elt
+        run: dbt source freshness --select source:basedosdados
