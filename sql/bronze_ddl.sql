@@ -1,5 +1,5 @@
--- Bronze layer DDL (dataset: analytics_engineering)
--- bronze_prices_weekly is defined in step 3d, after the ANP file layout is confirmed.
+-- Bronze layer DDL (dataset: analytics_engineering; edit the name below to use another one)
+-- Fuel prices have no bronze table: they are read directly from the Base dos Dados mirror (see dbt sources).
 -- bronze_locations is a dbt seed (see seeds/bronze_locations.csv).
 
 create table if not exists analytics_engineering.bronze_weather_daily (
