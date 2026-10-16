@@ -70,3 +70,21 @@ models:
     data_tests:
       - unique:
           column_name: "concat(cast(week_start as string), '-', state, '-', product, '-', cast(lag_weeks as string))"
+
+  - name: gold_corr_rain_price
+    description: >
+      Correlation between weekly rainfall (one representative city per state) and weekly price change,
+      by state, product and rainfall lag. corr_seasonally_adjusted removes the seasonal mean of each ISO week.
+      t-statistics are naive (no autocorrelation correction); significance flags use a Bonferroni threshold for 90 tests.
+    columns:
+      - name: state
+        data_tests: [not_null]
+      - name: product
+        data_tests: [not_null]
+      - name: lag_weeks
+        data_tests: [not_null]
+      - name: n_weeks
+        data_tests: [not_null]
+    data_tests:
+      - unique:
+          column_name: "concat(state, '-', product, '-', cast(lag_weeks as string))"
