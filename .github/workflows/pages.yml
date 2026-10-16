@@ -43,7 +43,7 @@ jobs:
         run: |
           cd dbt/agro_elt
           dbt deps || true
-          dbt docs generate
+          dbt docs generate --exclude "source:basedosdados"
 
           # Pages expects a folder. We publish target/ as the site root.
           touch target/.nojekyll
