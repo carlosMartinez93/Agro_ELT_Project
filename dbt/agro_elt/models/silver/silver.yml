@@ -5,9 +5,45 @@ models:
     description: "Cleaned daily weather. Deduplicated by (date, location_key)."
     columns:
       - name: date
-        tests: [not_null]
+        data_tests: [not_null]
       - name: location_key
-        tests: [not_null]
+        data_tests: [not_null]
     data_tests:
       - unique:
           column_name: "concat(cast(date as string), '-', location_key)"
+
+  - name: silver_prices_weekly
+    description: >
+      Weekly fuel prices (ethanol and gasoline) by state, aggregated from station-level ANP survey rows
+      (Base dos Dados mirror). Weeks start on Monday. Grain: week_start x state x product.
+    columns:
+      - name: week_start
+        description: "Monday of the survey week."
+        data_tests: [not_null]
+      - name: state
+        description: "State code (UF)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ['SP', 'GO', 'MG', 'MS', 'PR']
+      - name: product
+        description: "ethanol or gasoline."
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ['ethanol', 'gasoline']
+      - name: avg_price
+        description: "Mean consumer price (R$/litre) across all survey rows in the week."
+        data_tests: [not_null]
+      - name: median_price
+        description: "Approximate median consumer price (R$/litre)."
+        data_tests: [not_null]
+      - name: n_obs
+        description: "Number of survey rows behind the average."
+        data_tests: [not_null]
+      - name: n_stations
+        description: "Number of distinct stations surveyed."
+        data_tests: [not_null]
+    data_tests:
+      - unique:
+          column_name: "concat(cast(week_start as string), '-', state, '-', product)"
