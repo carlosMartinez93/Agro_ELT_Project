@@ -2,20 +2,23 @@ version: 2
 
 models:
   - name: gold_dim_location
-    description: "Location dimension used by gold fact tables."
+    description: "Location dimension used by gold fact tables. One representative city per state."
     columns:
       - name: location_key
-        description: "Surrogate key for a location (e.g., rio_de_janeiro_rj_sudeste, global_market_na)."
-        tests:
+        description: "Surrogate key for a location (e.g., ribeirao_preto_sp_sudeste)."
+        data_tests:
           - not_null
           - unique
+      - name: state
+        description: "State code (UF). Joins weather to fuel prices."
+        data_tests: [not_null]
 
   - name: gold_dim_date
     description: "Date dimension (day grain)."
     columns:
       - name: date_day
         description: "Calendar day."
-        tests:
+        data_tests:
           - not_null
           - unique
 
@@ -24,9 +27,46 @@ models:
     columns:
       - name: date_day
         description: "Calendar day for the observation."
-        tests:
-          - not_null
+        data_tests: [not_null]
       - name: location_key
         description: "Foreign key to gold_dim_location."
-        tests:
+        data_tests: [not_null]
+
+  - name: gold_fct_fuel_prices
+    description: "Weekly ethanol and gasoline prices by state. Grain: (week_start, state, product)."
+    columns:
+      - name: week_start
+        data_tests: [not_null]
+      - name: state
+        data_tests: [not_null]
+      - name: product
+        data_tests: [not_null]
+    data_tests:
+      - unique:
+          column_name: "concat(cast(week_start as string), '-', state, '-', product)"
+
+  - name: gold_fct_weather_price
+    description: >
+      Fuel price weeks joined to weekly rainfall at lags of 0 to 8 weeks. Grain: (week_start, state, product, lag_weeks).
+      Use price_change_pct for correlation: price levels trend and share seasonality with rainfall.
+    columns:
+      - name: week_start
+        description: "Monday of the price week."
+        data_tests: [not_null]
+      - name: state
+        data_tests: [not_null]
+      - name: product
+        data_tests: [not_null]
+      - name: lag_weeks
+        description: "Weeks between the rainfall week and the price week."
+        data_tests:
           - not_null
+          - accepted_values:
+              values: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+              quote: false
+      - name: precip_mm
+        description: "Total rainfall in the weather week, from the state's representative city."
+        data_tests: [not_null]
+    data_tests:
+      - unique:
+          column_name: "concat(cast(week_start as string), '-', state, '-', product, '-', cast(lag_weeks as string))"
